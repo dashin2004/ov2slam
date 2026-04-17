@@ -1,7 +1,7 @@
 # System architecture: amd64 or arm64v8
 ARG ARCHITECTURE=amd64
 ARG ROS_DISTRO=humble
-ARG BASE_IMAGE=${ARCHITECTURE}/ros:${ROS_DISTRO}-ros-core
+ARG BASE_IMAGE=ros:${ROS_DISTRO}-ros-core
 FROM $BASE_IMAGE
 
 RUN apt-get update \

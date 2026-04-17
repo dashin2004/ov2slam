@@ -462,7 +462,16 @@ void SlamManager::visualizeAtFrameRate(const double time)
 {
     bframe_viz_ison_ = true;
     
-    visualizeFrame(pvisualfrontend_->cur_img_, time);
+    cv::Mat safe_img;
+    if (!pvisualfrontend_->cur_img_.empty()) {
+        pvisualfrontend_->cur_img_.copyTo(safe_img);
+    }
+    
+    if (!safe_img.empty()) {
+        try {
+            visualizeFrame(safe_img, time);
+        } catch (...) {}
+    }
     visualizeVOTraj(time);
     prosviz_->pubPointCloud(pmap_->pcloud_, time);
     
