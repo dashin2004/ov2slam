@@ -68,12 +68,19 @@ ros2 run ov2slam ov2slam_node src/ov2slam/parameters_files/fast/euroc/euroc_mono
 **Important:** The `euroc_mono.yaml` file natively expects the camera topic to be `/cam0/image_raw`. The command above uses `--remap /image_raw:=/cam0/image_raw` so that `v4l2_camera` correctly provides the images to the SLAM node.
 
 ### Launching RViz Validation
-Open a new terminal, jump into the same container using `docker exec -it <container_name> bash`, source the workspace, and run RViz using the provided config:
+Open a new terminal, jump into the same container using `docker exec -it -e DISPLAY=$DISPLAY <container_name> bash`, source the workspace, and run RViz using the provided config:
 
 ```bash
 source /opt/ros/humble/setup.bash
 source /ws/install/setup.bash
 rviz2 -d /ws/src/ov2slam/ov2slam_visualization.rviz
 ```
+### Launching mapper node
+Open a new terminal, jump into the same container using `docker exec -it -e DISPLAY=$DISPLAY <container_name> bash`, source the workspace, and run mapper using the provided config:
+```bash
+ros2 run ov2slam map2d_node
+```
+
+
 
 You should now be able to see the SLAM pipeline attempting to output tracking and mapping results based on your live mono camera!

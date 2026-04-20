@@ -314,3 +314,7 @@ AMENT_IGNORE
 
 # Ignore ov2slam results files
 *.txt
+
+# Vendored ImGui (cloned during Docker build)
+Thirdparty/imgui/
+

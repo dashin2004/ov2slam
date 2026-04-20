@@ -222,4 +222,58 @@ install(TARGETS
   INCLUDES DESTINATION include
 )
 
+############################
+## ImGui 2D Map Viewer    ##
+############################
+find_package(glfw3 QUIET)
+find_package(OpenGL QUIET)
+
+if (glfw3_FOUND AND OpenGL_FOUND)
+  message(STATUS "GLFW3 + OpenGL found — building map2d_node")
+
+  # ImGui library (vendored)
+  set(IMGUI_DIR ${PROJECT_SOURCE_DIR}/Thirdparty/imgui)
+  add_library(imgui STATIC
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/imgui_demo.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+  )
+  target_include_directories(imgui PUBLIC
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+  )
+  target_link_libraries(imgui PUBLIC glfw OpenGL::GL)
+
+  # Map2D node executable
+  add_executable(map2d_node src/map2d_node.cpp)
+
+  target_include_directories(map2d_node PRIVATE
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+  )
+
+  target_link_libraries(map2d_node
+    imgui
+    glfw
+    OpenGL::GL
+  )
+
+  ament_target_dependencies(map2d_node
+    rclcpp
+    sensor_msgs
+    geometry_msgs
+  )
+
+  install(TARGETS
+    map2d_node
+    DESTINATION lib/${PROJECT_NAME}
+  )
+else()
+  message(WARNING "GLFW3 or OpenGL not found — map2d_node will NOT be built")
+endif()
+
 ament_package()

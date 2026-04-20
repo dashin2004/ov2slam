@@ -193,9 +193,18 @@ RUN apt update \
         ros-${ROS_DISTRO}-rosbag2-storage-default-plugins \
         ros-${ROS_DISTRO}-rviz2 \
         ros-${ROS_DISTRO}-backward-ros \
+        ros-${ROS_DISTRO}-geometry-msgs \
+        libglfw3-dev \
+        libgl1-mesa-dev \
     && rm -rf /var/lib/apt/lists/*
 
 ADD . /ws/src/ov2slam
 
+# Clone ImGui for 2D map viewer (if not already present)
+RUN if [ ! -d /ws/src/ov2slam/Thirdparty/imgui ]; then \
+        git clone --depth 1 --branch v1.91.8 https://github.com/ocornut/imgui.git /ws/src/ov2slam/Thirdparty/imgui; \
+    fi
+
 WORKDIR /ws
 RUN . /opt/ros/$ROS_DISTRO/setup.sh && colcon build
+
