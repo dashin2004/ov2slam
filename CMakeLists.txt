@@ -266,6 +266,8 @@ if (glfw3_FOUND AND OpenGL_FOUND)
     rclcpp
     sensor_msgs
     geometry_msgs
+    PCL
+    pcl_conversions
   )
 
   install(TARGETS

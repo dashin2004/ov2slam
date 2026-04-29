@@ -11,7 +11,7 @@
 
 class MapperNode : public rclcpp::Node {
 public:
-	MapperNode() : Node("ov2slam mapper 2d") {
+	MapperNode() : Node("mapper2d") {
 			pointcloud_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>(
 				"/pointcloud", 10, std::bind(&MapperNode::point_cloud_callback,this, std::placeholders::_1));
 			
@@ -53,6 +53,7 @@ public:
 				IM_COL32(0, 255, 0, 255));
 				ImGui::Dummy(ImVec2(width_map * 5, height_map * 5));
 				ImGui::End();
+			}
 		
 private:
 		void point_cloud_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg){
