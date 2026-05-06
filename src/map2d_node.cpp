@@ -8,7 +8,7 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-
+#include <algorithm>
 class MapperNode : public rclcpp::Node {
 public:
 	MapperNode() : Node("mapper2d") {
@@ -67,6 +67,7 @@ private:
 			pose_y = msg->pose.position.z;
 		}
 		void mapping(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
+			std::fill(grid_map.begin(), grid_map.end(), 0);
 			for(auto& point : cloud->points){
 				if (point.y < -0.5 || point.y > 0.5) {
 					continue;
@@ -92,7 +93,7 @@ private:
 		rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub;
 		const int width_map = 66;
 		const int height_map = 66;
-		const float map_size = 20.0; //2m na mape
+		const float map_size = 10.0; //2m na mape
 		const float resolution = map_size/width_map; //3cm na komorke
 		std::vector<int> grid_map;
 		float pose_x;
