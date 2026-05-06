@@ -30,7 +30,7 @@ public:
 						int index = (y*66) + x;
 						int hits = grid_map[index];
 						ImU32 color;
-						int redness = hits*5;
+						int redness = hits*3;
 
 						if (redness < 255 && redness > 0){
 							color = IM_COL32(redness, 0, 0, 255);
