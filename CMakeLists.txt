@@ -278,4 +278,13 @@ else()
   message(WARNING "GLFW3 or OpenGL not found — map2d_node will NOT be built")
 endif()
 
+# Dodanie naszego noda IMU
+add_executable(mpu6050_node src/mpu6050_node.cpp)
+ament_target_dependencies(mpu6050_node rclcpp sensor_msgs)
+
+install(TARGETS
+  mpu6050_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_package()
