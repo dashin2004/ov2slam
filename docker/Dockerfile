@@ -194,6 +194,7 @@ RUN apt update \
         ros-${ROS_DISTRO}-rviz2 \
         ros-${ROS_DISTRO}-backward-ros \
         ros-${ROS_DISTRO}-geometry-msgs \
+        ros-${ROS_DISTRO}-robot-localization \
         libglfw3-dev \
         libgl1-mesa-dev \
     && rm -rf /var/lib/apt/lists/*

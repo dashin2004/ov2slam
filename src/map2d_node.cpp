@@ -20,6 +20,7 @@ public:
 				"/vo_pose",10,std::bind(&MapperNode::pose_callback,this,std::placeholders::_1));
 				grid_map.resize(width_map*height_map);
 			}
+			Imu_sub = this->create_subscription<sensor_msgs::msg::Imu>("imu/data", 10, std::bind(&MapperNode::imu_callback, this, std::placeholders::_1));
 			void draw_gui(){
 				ImGui::Begin("map");
 				//drawing
@@ -66,6 +67,9 @@ private:
 			pose_x = msg->pose.position.x;
 			pose_y = msg->pose.position.z;
 		}
+		void imu_callback(const sensor_msgs:msg::Imu::SharedPtr msg){
+		}
+
 		void mapping(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
 			for(auto& point : cloud->points){
 				if (point.y < -0.5 || point.y > 0.5) {

@@ -101,6 +101,7 @@ find_package(tf2_ros REQUIRED)
 find_package(PCL REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(backward_ros REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 ###########
 ## Build ##
@@ -285,6 +286,20 @@ ament_target_dependencies(mpu6050_node rclcpp sensor_msgs)
 install(TARGETS
   mpu6050_node
   DESTINATION lib/${PROJECT_NAME}
+)
+
+add_executable(pose_cov_adder_node src/pose_cov_adder.cpp)
+ament_target_dependencies(pose_cov_adder_node rclcpp geometry_msgs)
+
+install(TARGETS
+  pose_cov_adder_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY
+  launch
+  config
+  DESTINATION share/${PROJECT_NAME}
 )
 
 ament_package()

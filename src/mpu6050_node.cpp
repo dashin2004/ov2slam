@@ -57,7 +57,18 @@ private:
         msg.angular_velocity.y = (read_word_2c(0x45) / gyro_scale) * (M_PI / 180.0);
         msg.angular_velocity.z = (read_word_2c(0x47) / gyro_scale) * (M_PI / 180.0);
 
-        msg.orientation_covariance[0] = -1.0;
+        
+	msg.orientation_covariance[0] = -1.0; 
+
+
+	msg.angular_velocity_covariance[0] = 0.002; // X
+	msg.angular_velocity_covariance[4] = 0.002; // Y
+	msg.angular_velocity_covariance[8] = 0.002; // Z
+
+
+	msg.linear_acceleration_covariance[0] = 0.04; // X
+	msg.linear_acceleration_covariance[4] = 0.04; // Y
+	msg.linear_acceleration_covariance[8] = 0.04; // Z
         publisher_->publish(msg);
     }
 };
