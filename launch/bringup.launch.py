@@ -1,0 +1,69 @@
+import os
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch_ros.actions import Node
+
+def generate_launch_description():
+    pkg_share = get_package_share_directory('ov2slam')
+
+    # Ścieżka do konfiguracji EKF
+    ekf_config_path = os.path.join(pkg_share, 'config', 'ekf.yaml')
+    
+    # Ścieżka do parametrów OV2SLAM (Euroc Mono)
+    ov2slam_config_path = os.path.join(pkg_share, 'parameters_files', 'average', 'euroc', 'euroc_mono.yaml')
+    
+    # Ścieżka do konfiguracji RViz
+    rviz_config_path = os.path.join(pkg_share, 'ov2slam_visualization.rviz') 
+
+    return LaunchDescription([
+        # 1. Węzeł IMU (MPU6050)
+        Node(
+            package='ov2slam',
+            executable='mpu6050_node',
+            name='mpu6050_node',
+            output='screen'
+        ),
+
+        # 2. Główny węzeł OV2SLAM
+        Node(
+            package='ov2slam',
+            executable='ov2slam_node',
+            name='ov2slam_node',
+            output='screen',
+            arguments=[ov2slam_config_path]
+        ),
+
+        # 3. Węzeł dodający kowariancję do pozy VO
+        Node(
+            package='ov2slam',
+            executable='pose_cov_adder_node',
+            name='pose_cov_adder_node',
+            output='screen'
+        ),
+
+        # 4. Węzeł filtra EKF (robot_localization)
+        Node(
+            package='robot_localization',
+            executable='ekf_node',
+            name='ekf_filter_node',
+            output='screen',
+            parameters=[ekf_config_path]
+        ),
+
+        # 5. Węzeł mapy 2D (ImGui)
+        Node(
+            package='ov2slam',
+            executable='map2d_node',
+            name='map2d_node',
+            output='screen'
+        ),
+
+        # 6. RViz2
+        Node(
+            package='rviz2',
+            executable='rviz2',
+            name='rviz2',
+            output='screen',
+            arguments=['-d', rviz_config_path]
+        )
+    ])

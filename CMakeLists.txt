@@ -102,7 +102,9 @@ find_package(PCL REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(backward_ros REQUIRED)
 find_package(geometry_msgs REQUIRED)
-
+find_package(nav_msgs REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_sensor_msgs REQUIRED)
 ###########
 ## Build ##
 ###########
@@ -267,8 +269,14 @@ if (glfw3_FOUND AND OpenGL_FOUND)
     rclcpp
     sensor_msgs
     geometry_msgs
+    nav_msgs
     PCL
     pcl_conversions
+    tf2            
+    tf2_ros         
+    tf2_geometry_msgs
+    tf2_sensor_msgs
+    
   )
 
   install(TARGETS
@@ -289,7 +297,14 @@ install(TARGETS
 )
 
 add_executable(pose_cov_adder_node src/pose_cov_adder.cpp)
-ament_target_dependencies(pose_cov_adder_node rclcpp geometry_msgs)
+ament_target_dependencies(pose_cov_adder_node 
+  rclcpp 
+  geometry_msgs 
+  nav_msgs 
+  std_msgs 
+  tf2 
+  tf2_geometry_msgs
+)
 
 install(TARGETS
   pose_cov_adder_node
@@ -299,6 +314,12 @@ install(TARGETS
 install(DIRECTORY
   launch
   config
+  parameters_files
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(FILES
+  ov2slam_visualization.rviz
   DESTINATION share/${PROJECT_NAME}
 )
 
