@@ -10,7 +10,7 @@ def generate_launch_description():
     ekf_config_path = os.path.join(pkg_share, 'config', 'ekf.yaml')
     
     # Ścieżka do parametrów OV2SLAM (Euroc Mono)
-    ov2slam_config_path = os.path.join(pkg_share, 'parameters_files', 'average', 'euroc', 'euroc_mono.yaml')
+    ov2slam_config_path = os.path.join(pkg_share, 'parameters_files', 'accurate', 'euroc', 'euroc_mono.yaml')
     
     # Ścieżka do konfiguracji RViz
     rviz_config_path = os.path.join(pkg_share, 'ov2slam_visualization.rviz') 

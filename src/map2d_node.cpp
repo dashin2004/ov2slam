@@ -47,7 +47,7 @@ public:
                 int index = (y * width_map) + x;
                 int hits = grid_map[index];
                 ImU32 color;
-                int redness = hits * 5;
+                int redness = hits * 10;
 
                 if (redness > 0) {
                     color = IM_COL32(std::min(redness, 255), 0, 0, 255);
@@ -88,34 +88,53 @@ private:
 
         auto transformed_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
         pcl::transformPointCloud(*pcl_cloud, *transformed_cloud, transform);
-        std::vector<float> z_coords;
-    for (const auto& p : transformed_cloud->points) {
-        z_coords.push_back(p.z);
-    }
+        // Scale the point cloud using current_scale to apply metric thresholds in RANSAC
+        pcl::PointCloud<pcl::PointXYZ>::Ptr scaled_cloud(new pcl::PointCloud<pcl::PointXYZ>());
+        for (const auto& p : transformed_cloud->points) {
+            pcl::PointXYZ sp;
+            sp.x = p.x * current_scale;
+            sp.y = p.y * current_scale;
+            sp.z = p.z * current_scale;
+            scaled_cloud->points.push_back(sp);
+        }
 
-    
-    std::sort(z_coords.begin(), z_coords.end());
-
-    if (z_coords.size() >= 5) {
-        
-        float spread = std::abs(z_coords[0] - z_coords[4]);
-        
-        if (spread < 0.05) { 
-            float avg_z_slam = (z_coords[0] + z_coords[1] + z_coords[2] + z_coords[3] + z_coords[4]) / 5.0f;
-            float h_slam = std::abs(avg_z_slam);
-
-            if (h_slam > 0.001f) {
-                
-                float measured_scale = 0.10f / h_slam; 
-                
-                
-                current_scale = (0.98f * current_scale) + (0.02f * measured_scale);
-                auto scale_msg = std_msgs::msg::Float32();
-                scale_msg.data = current_scale;
-                scale_pub_->publish(scale_msg);
+        // Filter points below the camera to find the floor candidates
+        pcl::PointCloud<pcl::PointXYZ>::Ptr floor_candidates(new pcl::PointCloud<pcl::PointXYZ>());
+        for (const auto& p : scaled_cloud->points) {
+            if (p.z < -0.02) { 
+                floor_candidates->points.push_back(p);
             }
         }
-    }
+
+        if (floor_candidates->points.size() > 20) {
+            pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients());
+            pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
+            pcl::SACSegmentation<pcl::PointXYZ> seg;
+
+            seg.setOptimizeCoefficients(true);
+            seg.setModelType(pcl::SACMODEL_PERPENDICULAR_PLANE);
+            seg.setMethodType(pcl::SAC_RANSAC);
+            seg.setMaxIterations(100);
+            seg.setDistanceThreshold(0.05); // 5cm metric threshold
+            seg.setAxis(Eigen::Vector3f(0.0, 0.0, 1.0)); 
+            seg.setEpsAngle(20.0f * (M_PI / 180.0f)); 
+
+            seg.setInputCloud(floor_candidates);
+            seg.segment(*inliers, *coefficients);
+
+            if (inliers->indices.size() > 10) {
+                float h_metric = std::abs(coefficients->values[3]);
+                float h_slam = h_metric / current_scale;
+                
+                if (h_slam > 0.001f) {
+                    float measured_scale = cam_height / h_slam;
+                    current_scale = (0.99f * current_scale) + (0.01f * measured_scale);
+                    auto scale_msg = std_msgs::msg::Float32();
+                    scale_msg.data = current_scale;
+                    scale_pub_->publish(scale_msg);
+                }
+            }
+        }
         mapping(transformed_cloud);
     }
 
@@ -127,12 +146,13 @@ private:
    
 
     void mapping(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud) {
+        std::fill(grid_map.begin(), grid_map.end(), 0);
         for (auto& point : cloud->points) {
             float px = point.x * current_scale;
             float py = point.y * current_scale;
             float pz = point.z * current_scale;
             
-            if (pz < -0.02 || pz > 0.5) {
+            if (pz < -0.08 || pz > 0.1) {
                 continue;
             }
 
@@ -144,9 +164,9 @@ private:
             }
 
             int index = (grid_y * width_map) + grid_x;
-            if (grid_map[index] < 100) {
-                grid_map[index] += 1;
-            }
+            
+                grid_map[index] += 10;
+            
         }
     }
 
@@ -159,13 +179,13 @@ private:
     float slam_height_est = -1.0f;
     const int width_map = 66;
     const int height_map = 66;
-    const float map_size = 20.0f;
+    const float map_size = 8.0f;
     const float resolution = map_size / width_map;
     std::vector<int> grid_map;
     float pose_x = 0.0f;
     float pose_y = 0.0f;
     float current_scale = 1.0f;
-    const float cam_height = 0.02f; 
+    const float cam_height = 0.092f; 
 };
 
 int main(int argc, char** argv) {
