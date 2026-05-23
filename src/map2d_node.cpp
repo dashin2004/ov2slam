@@ -31,7 +31,10 @@ public:
             "/odometry/filtered", 10, std::bind(&MapperNode::odom_callback, this, std::placeholders::_1));
 
         
-        scale_pub_ = this->create_publisher<std_msgs::msg::Float32>("/slam_scale", 10);
+        scale_sub_ = this->create_subscription<std_msgs::msg::Float32>(
+            "/slam_scale", 10, [this](const std_msgs::msg::Float32::SharedPtr msg) {
+                current_scale = msg->data;
+            });
         grid_map.assign(width_map * height_map, 0);
         tf_buffer = std::make_shared<tf2_ros::Buffer>(this->get_clock());
         tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
@@ -88,53 +91,6 @@ private:
 
         auto transformed_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
         pcl::transformPointCloud(*pcl_cloud, *transformed_cloud, transform);
-        // Scale the point cloud using current_scale to apply metric thresholds in RANSAC
-        pcl::PointCloud<pcl::PointXYZ>::Ptr scaled_cloud(new pcl::PointCloud<pcl::PointXYZ>());
-        for (const auto& p : transformed_cloud->points) {
-            pcl::PointXYZ sp;
-            sp.x = p.x * current_scale;
-            sp.y = p.y * current_scale;
-            sp.z = p.z * current_scale;
-            scaled_cloud->points.push_back(sp);
-        }
-
-        // Filter points below the camera to find the floor candidates
-        pcl::PointCloud<pcl::PointXYZ>::Ptr floor_candidates(new pcl::PointCloud<pcl::PointXYZ>());
-        for (const auto& p : scaled_cloud->points) {
-            if (p.z < -0.02) { 
-                floor_candidates->points.push_back(p);
-            }
-        }
-
-        if (floor_candidates->points.size() > 20) {
-            pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients());
-            pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
-            pcl::SACSegmentation<pcl::PointXYZ> seg;
-
-            seg.setOptimizeCoefficients(true);
-            seg.setModelType(pcl::SACMODEL_PERPENDICULAR_PLANE);
-            seg.setMethodType(pcl::SAC_RANSAC);
-            seg.setMaxIterations(100);
-            seg.setDistanceThreshold(0.05); // 5cm metric threshold
-            seg.setAxis(Eigen::Vector3f(0.0, 0.0, 1.0)); 
-            seg.setEpsAngle(20.0f * (M_PI / 180.0f)); 
-
-            seg.setInputCloud(floor_candidates);
-            seg.segment(*inliers, *coefficients);
-
-            if (inliers->indices.size() > 10) {
-                float h_metric = std::abs(coefficients->values[3]);
-                float h_slam = h_metric / current_scale;
-                
-                if (h_slam > 0.001f) {
-                    float measured_scale = cam_height / h_slam;
-                    current_scale = (0.99f * current_scale) + (0.01f * measured_scale);
-                    auto scale_msg = std_msgs::msg::Float32();
-                    scale_msg.data = current_scale;
-                    scale_pub_->publish(scale_msg);
-                }
-            }
-        }
         mapping(transformed_cloud);
     }
 
@@ -173,7 +129,7 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_sub;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub;
-    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr scale_pub_;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr scale_sub_;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener;
     float slam_height_est = -1.0f;

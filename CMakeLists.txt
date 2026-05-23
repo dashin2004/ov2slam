@@ -296,6 +296,14 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+add_executable(encoder_scale_node src/encoder_scale_node.cpp)
+ament_target_dependencies(encoder_scale_node rclcpp std_msgs geometry_msgs)
+
+install(TARGETS
+  encoder_scale_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 add_executable(pose_cov_adder_node src/pose_cov_adder.cpp)
 ament_target_dependencies(pose_cov_adder_node 
   rclcpp 

@@ -41,6 +41,14 @@ def generate_launch_description():
             output='screen'
         ),
 
+        # 3b. Węzeł skali z enkoderów
+        Node(
+            package='ov2slam',
+            executable='encoder_scale_node',
+            name='encoder_scale_node',
+            output='screen'
+        ),
+
         # 4. Węzeł filtra EKF (robot_localization)
         Node(
             package='robot_localization',
