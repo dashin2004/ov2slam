@@ -41,11 +41,11 @@ def generate_launch_description():
             output='screen'
         ),
 
-        # 3b. Węzeł skali z enkoderów
+        # 3b. Węzeł skali z enkoderów (nowy)
         Node(
             package='ov2slam',
-            executable='encoder_scale_node',
-            name='encoder_scale_node',
+            executable='skala_node',
+            name='skala_node',
             output='screen'
         ),
 

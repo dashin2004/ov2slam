@@ -304,6 +304,14 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+add_executable(skala_node src/skala_node.cpp)
+ament_target_dependencies(skala_node rclcpp std_msgs nav_msgs geometry_msgs)
+
+install(TARGETS
+  skala_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 add_executable(pose_cov_adder_node src/pose_cov_adder.cpp)
 ament_target_dependencies(pose_cov_adder_node 
   rclcpp 

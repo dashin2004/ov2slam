@@ -22,9 +22,9 @@ xhost +local:root
 ```
 *(If the above fails, you can try `xhost +local:root` or just `xhost +` temporarily)*
 
-## 3. Run the Docker Container
+## 3. Run the Docker Container (Local & SSH)
 
-Run the built image using your computer's host network (`--net=host`). We also bind `/dev/video0` (which is typically your mono camera) and share the X11 UNIX socket. If your camera is on a different index, replace `/dev/video0` appropriately.
+If you are running directly on the machine:
 
 ```bash
 docker run -it --rm \
@@ -33,6 +33,27 @@ docker run -it --rm \
     --env="DISPLAY=$DISPLAY" \
     --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
     --device="/dev/video0:/dev/video0" \
+    --device="/dev/i2c-1:/dev/i2c-1" \
+    ov2slam_docker \
+    bash
+```
+*(Note: `--device="/dev/i2c-1:/dev/i2c-1"` was added to give container access to the sensors)*
+
+**Running over SSH (with X11 Forwarding):**
+If you are connecting via SSH, you must connect with the `-Y` flag (trusted X11 forwarding):
+```bash
+ssh -Y user@robot_ip
+```
+And then run the docker container with your local `.Xauthority` mounted so the container can authorize with the forwarded X11 session:
+```bash
+docker run -it --rm \
+    --net=host \
+    --ipc=host \
+    --env="DISPLAY=$DISPLAY" \
+    --volume="$HOME/.Xauthority:/root/.Xauthority:rw" \
+    --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
+    --device="/dev/video0:/dev/video0" \
+    --device="/dev/i2c-1:/dev/i2c-1" \
     ov2slam_docker \
     bash
 ```
@@ -49,38 +70,19 @@ source /opt/ros/humble/setup.bash
 source /ws/install/setup.bash
 ```
 
-### Launching the Camera Node
-OV2SLAM expects a stream of images over ROS2. You can use the standard `v4l2_camera` to read from `/dev/video0`. If the package isn't installed in the image, you can quickly install it:
+### Launching everything via Bringup
 
+Instead of launching all nodes in separate terminals, we can launch the camera in the background and then use the main bringup file.
+
+1. **Launch the camera (in the background):**
 ```bash
 apt-get update && apt-get install -y ros-humble-v4l2-camera
 ros2 run v4l2_camera v4l2_camera_node --ros-args -p image_size:=[640,480] --remap /image_raw:=/cam0/image_raw &
 ```
-*(This will publish your camera feed to `/image_raw`)*
 
-### Launching the OV2SLAM Node
-Now start the OV2SLAM node using a monocular parameter file. We will use the EuRoC mono parameter configuration as a template (you can adjust this later depending on your camera's calibration).
-
+2. **Launch all SLAM, Sensors, and RViz nodes at once:**
 ```bash
-ros2 run ov2slam ov2slam_node src/ov2slam/parameters_files/fast/euroc/euroc_mono.yaml
+ros2 launch ov2slam bringup.launch.py
 ```
 
-**Important:** The `euroc_mono.yaml` file natively expects the camera topic to be `/cam0/image_raw`. The command above uses `--remap /image_raw:=/cam0/image_raw` so that `v4l2_camera` correctly provides the images to the SLAM node.
-
-### Launching RViz Validation
-Open a new terminal, jump into the same container using `docker exec -it -e DISPLAY=$DISPLAY <container_name> bash`, source the workspace, and run RViz using the provided config:
-
-```bash
-source /opt/ros/humble/setup.bash
-source /ws/install/setup.bash
-rviz2 -d /ws/src/ov2slam/ov2slam_visualization.rviz
-```
-### Launching mapper node
-Open a new terminal, jump into the same container using `docker exec -it -e DISPLAY=$DISPLAY <container_name> bash`, source the workspace, and run mapper using the provided config:
-```bash
-ros2 run ov2slam map2d_node
-```
-
-
-
-You should now be able to see the SLAM pipeline attempting to output tracking and mapping results based on your live mono camera!
+You should now be able to see the SLAM pipeline attempting to output tracking and mapping results based on your live mono camera, with all nodes (IMU, Encoders, EKF, Map2D) running seamlessly!
