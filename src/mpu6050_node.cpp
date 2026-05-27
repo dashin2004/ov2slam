@@ -24,6 +24,9 @@ public:
         char buf[2] = {0x6B, 0x00};
         write(i2c_file_, buf, 2);
 
+        // Przeprowadzenie autokalibracji przed startem publikacji
+        calibrate_sensor();
+
         // Timer 100Hz (10ms)
         timer_ = this->create_wall_timer(std::chrono::milliseconds(10), std::bind(&Mpu6050Node::timer_callback, this));
     }
@@ -33,12 +36,53 @@ private:
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr publisher_;
 
+    // Zmienne przechowujące wyliczone błędy (offsety)
+    double accel_offset_x_ = 0.0;
+    double accel_offset_y_ = 0.0;
+    double accel_offset_z_ = 0.0;
+    double gyro_offset_x_ = 0.0;
+    double gyro_offset_y_ = 0.0;
+    double gyro_offset_z_ = 0.0;
+
     int16_t read_word_2c(int addr) {
         char reg[1] = {(char)addr};
         write(i2c_file_, reg, 1);
         char data[2];
         read(i2c_file_, data, 2);
         return (data[0] << 8) | data[1];
+    }
+
+    void calibrate_sensor() {
+        RCLCPP_INFO(this->get_logger(), "ROZPOCZYNAM KALIBRACJE - NIE RUSZAJ CZUJNIKIEM!");
+        
+        int num_samples = 500;
+        long sum_ax = 0, sum_ay = 0, sum_az = 0;
+        long sum_gx = 0, sum_gy = 0, sum_gz = 0;
+
+        for (int i = 0; i < 100; i++) {
+            read_word_2c(0x3B);
+            usleep(2000); 
+        }
+
+        for (int i = 0; i < num_samples; i++) {
+            sum_ax += read_word_2c(0x3B);
+            sum_ay += read_word_2c(0x3D);
+            sum_az += read_word_2c(0x3F);
+            sum_gx += read_word_2c(0x43);
+            sum_gy += read_word_2c(0x45);
+            sum_gz += read_word_2c(0x47);
+            usleep(2000); 
+        }
+
+        accel_offset_x_ = (double)sum_ax / num_samples;
+        accel_offset_y_ = (double)sum_ay / num_samples;
+        accel_offset_z_ = ((double)sum_az / num_samples) - 16384.0; 
+
+        gyro_offset_x_ = (double)sum_gx / num_samples;
+        gyro_offset_y_ = (double)sum_gy / num_samples;
+        gyro_offset_z_ = (double)sum_gz / num_samples;
+
+        RCLCPP_INFO(this->get_logger(), "KALIBRACJA ZAKONCZONA.");
     }
 
     void timer_callback() {
@@ -48,27 +92,26 @@ private:
 
         double acc_scale = 16384.0;
         double g = 9.80665;
-        msg.linear_acceleration.x = (read_word_2c(0x3B) / acc_scale) * g;
-        msg.linear_acceleration.y = (read_word_2c(0x3D) / acc_scale) * g;
-        msg.linear_acceleration.z = (read_word_2c(0x3F) / acc_scale) * g;
+        // Zastosowanie wyliczonych offsetów
+        msg.linear_acceleration.x = ((read_word_2c(0x3B) - accel_offset_x_) / acc_scale) * g;
+        msg.linear_acceleration.y = ((read_word_2c(0x3D) - accel_offset_y_) / acc_scale) * g;
+        msg.linear_acceleration.z = ((read_word_2c(0x3F) - accel_offset_z_) / acc_scale) * g;
 
         double gyro_scale = 131.0;
-        msg.angular_velocity.x = (read_word_2c(0x43) / gyro_scale) * (M_PI / 180.0);
-        msg.angular_velocity.y = (read_word_2c(0x45) / gyro_scale) * (M_PI / 180.0);
-        msg.angular_velocity.z = (read_word_2c(0x47) / gyro_scale) * (M_PI / 180.0);
+        msg.angular_velocity.x = ((read_word_2c(0x43) - gyro_offset_x_) / gyro_scale) * (M_PI / 180.0);
+        msg.angular_velocity.y = ((read_word_2c(0x45) - gyro_offset_y_) / gyro_scale) * (M_PI / 180.0);
+        msg.angular_velocity.z = ((read_word_2c(0x47) - gyro_offset_z_) / gyro_scale) * (M_PI / 180.0);
 
-        
-	msg.orientation_covariance[0] = -1.0; 
+        msg.orientation_covariance[0] = -1.0; 
 
+        msg.angular_velocity_covariance[0] = 0.002; // X
+        msg.angular_velocity_covariance[4] = 0.002; // Y
+        msg.angular_velocity_covariance[8] = 0.002; // Z
 
-	msg.angular_velocity_covariance[0] = 0.002; // X
-	msg.angular_velocity_covariance[4] = 0.002; // Y
-	msg.angular_velocity_covariance[8] = 0.002; // Z
+        msg.linear_acceleration_covariance[0] = 0.04; // X
+        msg.linear_acceleration_covariance[4] = 0.04; // Y
+        msg.linear_acceleration_covariance[8] = 0.04; // Z
 
-
-	msg.linear_acceleration_covariance[0] = 0.04; // X
-	msg.linear_acceleration_covariance[4] = 0.04; // Y
-	msg.linear_acceleration_covariance[8] = 0.04; // Z
         publisher_->publish(msg);
     }
 };
