@@ -201,8 +201,8 @@ int main(int argc, char** argv)
     SensorsGrabber sb(&slam);
 
     // Create callbacks according to the topics set in the parameters file
-    auto subleft = node->create_subscription<sensor_msgs::msg::Image>(fsSettings["Camera.topic_left"], 2, [&sb](const sensor_msgs::msg::Image &image){return sb.subLeftImage(image);});
-    auto subright = node->create_subscription<sensor_msgs::msg::Image>(fsSettings["Camera.topic_right"], 2, [&sb](const sensor_msgs::msg::Image &image){return sb.subRightImage(image);});
+    auto subleft = node->create_subscription<sensor_msgs::msg::Image>((std::string)fsSettings["Camera.topic_left"], rclcpp::SensorDataQoS(), [&sb](const sensor_msgs::msg::Image &image){return sb.subLeftImage(image);});
+    auto subright = node->create_subscription<sensor_msgs::msg::Image>((std::string)fsSettings["Camera.topic_right"], rclcpp::SensorDataQoS(), [&sb](const sensor_msgs::msg::Image &image){return sb.subRightImage(image);});
 
     // Start a thread for providing new measurements to the SLAM
     std::thread sync_thread(&SensorsGrabber::sync_process, &sb);

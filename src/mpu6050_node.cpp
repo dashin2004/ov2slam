@@ -1,5 +1,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
+#include <std_msgs/msg/float32.hpp>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -10,6 +11,8 @@ class Mpu6050Node : public rclcpp::Node {
 public:
     Mpu6050Node() : Node("mpu6050_node") {
         publisher_ = this->create_publisher<sensor_msgs::msg::Imu>("imu/data", 10);
+        
+
         
         if ((i2c_file_ = open("/dev/i2c-1", O_RDWR)) < 0) {
             RCLCPP_ERROR(this->get_logger(), "Nie mozna otworzyc I2C (/dev/i2c-1)");
@@ -36,6 +39,7 @@ private:
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr publisher_;
 
+
     // Zmienne przechowujące wyliczone błędy (offsety)
     double accel_offset_x_ = 0.0;
     double accel_offset_y_ = 0.0;
@@ -43,6 +47,8 @@ private:
     double gyro_offset_x_ = 0.0;
     double gyro_offset_y_ = 0.0;
     double gyro_offset_z_ = 0.0;
+
+
 
     int16_t read_word_2c(int addr) {
         char reg[1] = {(char)addr};
@@ -90,17 +96,25 @@ private:
         msg.header.stamp = this->get_clock()->now();
         msg.header.frame_id = "imu_link";
 
+        // Odczyt raw wartości tylko raz
+        int16_t raw_ax = read_word_2c(0x3B);
+        int16_t raw_ay = read_word_2c(0x3D);
+        int16_t raw_az = read_word_2c(0x3F);
+        int16_t raw_gx = read_word_2c(0x43);
+        int16_t raw_gy = read_word_2c(0x45);
+        int16_t raw_gz = read_word_2c(0x47);
+
         double acc_scale = 16384.0;
         double g = 9.80665;
-        // Zastosowanie wyliczonych offsetów
-        msg.linear_acceleration.x = ((read_word_2c(0x3B) - accel_offset_x_) / acc_scale) * g;
-        msg.linear_acceleration.y = ((read_word_2c(0x3D) - accel_offset_y_) / acc_scale) * g;
-        msg.linear_acceleration.z = ((read_word_2c(0x3F) - accel_offset_z_) / acc_scale) * g;
+        // Zastosowanie offsetów z kalibracji
+        msg.linear_acceleration.x = ((raw_ax - accel_offset_x_) / acc_scale) * g;
+        msg.linear_acceleration.y = ((raw_ay - accel_offset_y_) / acc_scale) * g;
+        msg.linear_acceleration.z = ((raw_az - accel_offset_z_) / acc_scale) * g;
 
         double gyro_scale = 131.0;
-        msg.angular_velocity.x = ((read_word_2c(0x43) - gyro_offset_x_) / gyro_scale) * (M_PI / 180.0);
-        msg.angular_velocity.y = ((read_word_2c(0x45) - gyro_offset_y_) / gyro_scale) * (M_PI / 180.0);
-        msg.angular_velocity.z = ((read_word_2c(0x47) - gyro_offset_z_) / gyro_scale) * (M_PI / 180.0);
+        msg.angular_velocity.x = ((raw_gx - gyro_offset_x_) / gyro_scale) * (M_PI / 180.0);
+        msg.angular_velocity.y = ((raw_gy - gyro_offset_y_) / gyro_scale) * (M_PI / 180.0);
+        msg.angular_velocity.z = ((raw_gz - gyro_offset_z_) / gyro_scale) * (M_PI / 180.0);
 
         msg.orientation_covariance[0] = -1.0; 
 

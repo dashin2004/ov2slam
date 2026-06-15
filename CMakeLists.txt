@@ -296,13 +296,6 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-add_executable(encoder_scale_node src/encoder_scale_node.cpp)
-ament_target_dependencies(encoder_scale_node rclcpp std_msgs geometry_msgs)
-
-install(TARGETS
-  encoder_scale_node
-  DESTINATION lib/${PROJECT_NAME}
-)
 
 add_executable(skala_node src/skala_node.cpp)
 ament_target_dependencies(skala_node rclcpp std_msgs nav_msgs geometry_msgs)

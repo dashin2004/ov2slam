@@ -14,10 +14,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_sensor_msgs/tf2_sensor_msgs.hpp>
-#include <pcl/sample_consensus/method_types.h>
-#include <pcl/sample_consensus/model_types.h>
-#include <pcl/segmentation/sac_segmentation.h>
-#include <pcl/filters/extract_indices.h>
+#include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/common/transforms.h>
 #include "std_msgs/msg/float32.hpp"
 
@@ -50,32 +47,43 @@ public:
                 int index = (y * width_map) + x;
                 int hits = grid_map[index];
                 ImU32 color;
-                int redness = hits * 10;
 
-                if (redness > 0) {
+                if (hits > 0) {
+                    int redness = hits * 10;
                     color = IM_COL32(std::min(redness, 255), 0, 0, 255);
                 } else {
                     color = IM_COL32(255, 255, 255, 255);
                 }
 
                 draw_list->AddRectFilled(
-                    ImVec2(p.x + (x * 5), p.y + (y * 5)),
-                    ImVec2(p.x + ((x + 1) * 5), p.y + ((y + 1) * 5)),
+                    ImVec2(p.x + (x * cell_draw_size), p.y + (y * cell_draw_size)),
+                    ImVec2(p.x + ((x + 1) * cell_draw_size), p.y + ((y + 1) * cell_draw_size)),
                     color);
             }
         }
+        
+        float rx = pose_x;
+        float ry = pose_y;
+        if (is_calibrated) {
+            float c = std::cos(-calib_yaw);
+            float s = std::sin(-calib_yaw);
+            float tx = rx * c - ry * s;
+            float ty = rx * s + ry * c;
+            rx = tx;
+            ry = ty;
+        }
 
-        int robot_grid_x = static_cast<int>((pose_x + (map_size / 2.0f)) / resolution);
-        int robot_grid_y = static_cast<int>((pose_y + (map_size / 2.0f)) / resolution);
+        int robot_grid_x = static_cast<int>((rx + (map_size / 2.0f)) / resolution);
+        int robot_grid_y = static_cast<int>((ry + (map_size / 2.0f)) / resolution);
 
         if (robot_grid_x >= 0 && robot_grid_x < width_map && robot_grid_y >= 0 && robot_grid_y < height_map) {
             draw_list->AddCircleFilled(
-                ImVec2(p.x + robot_grid_x * 5 + 2.5f, p.y + robot_grid_y * 5 + 2.5f),
-                3.0f,
+                ImVec2(p.x + robot_grid_x * cell_draw_size + (cell_draw_size / 2.0f), p.y + robot_grid_y * cell_draw_size + (cell_draw_size / 2.0f)),
+                cell_draw_size * 0.8f,
                 IM_COL32(0, 255, 0, 255));
         }
 
-        ImGui::Dummy(ImVec2(width_map * 5, height_map * 5));
+        ImGui::Dummy(ImVec2(width_map * cell_draw_size, height_map * cell_draw_size));
         ImGui::End();
     }
 
@@ -85,30 +93,62 @@ private:
         pcl::fromROSMsg(*msg, *pcl_cloud);
         Eigen::Affine3f transform = Eigen::Affine3f::Identity();
     
-    
+        if (is_calibrated) {
+            transform.rotate(Eigen::AngleAxisf(-calib_yaw, Eigen::Vector3f::UnitZ()));
+        }
+        
         transform.rotate(Eigen::AngleAxisf(-M_PI/2.0, Eigen::Vector3f::UnitZ()));
         transform.rotate(Eigen::AngleAxisf(-M_PI/2.0, Eigen::Vector3f::UnitX()));
 
         auto transformed_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
         pcl::transformPointCloud(*pcl_cloud, *transformed_cloud, transform);
-        mapping(transformed_cloud);
+        
+        // Filtracja szumow (Statistical Outlier Removal)
+        pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_cloud(new pcl::PointCloud<pcl::PointXYZ>());
+        pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
+        sor.setInputCloud(transformed_cloud);
+        sor.setMeanK(20);             
+        sor.setStddevMulThresh(1.0);  
+        sor.filter(*filtered_cloud);
+
+        mapping(filtered_cloud);
     }
 
     void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
         pose_x = msg->pose.pose.position.x;
         pose_y = msg->pose.pose.position.y; 
+        
+        if (!has_initial_pose) {
+            initial_pose_x = pose_x;
+            initial_pose_y = pose_y;
+            has_initial_pose = true;
+        }
+
+        if (!is_calibrated) {
+            float dx = pose_x - initial_pose_x;
+            float dy = pose_y - initial_pose_y;
+            float dist = std::sqrt(dx*dx + dy*dy);
+            if (dist > 0.2f) {
+                calib_yaw = std::atan2(dy, dx);
+                is_calibrated = true;
+                RCLCPP_INFO(this->get_logger(), "Trajektoria wyrownana! Kat rotacji: %f rad", calib_yaw);
+            }
+        }
     }
 
    
 
     void mapping(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud) {
         std::fill(grid_map.begin(), grid_map.end(), 0);
+        
+        std::vector<int> point_counts(width_map * height_map, 0);
+
         for (auto& point : cloud->points) {
             float px = point.x * current_scale;
             float py = point.y * current_scale;
             float pz = point.z * current_scale;
             
-            if (pz < -0.08 || pz > 0.1) {
+            if (pz < -0.02 || pz > 0.3) {
                 continue;
             }
 
@@ -120,9 +160,14 @@ private:
             }
 
             int index = (grid_y * width_map) + grid_x;
-            
-                grid_map[index] += 10;
-            
+            point_counts[index]++;
+        }
+
+        // Mapowanie do wektora z uwzglednieniem minimalnej liczby punktow per komorka
+        for (size_t i = 0; i < point_counts.size(); ++i) {
+            if (point_counts[i] >= 3) { // Prog - wymagamy np. 3 punktow, by uznac za przeszkode
+                grid_map[i] = point_counts[i]; // Utrzymujemy ilosc, zeby miec gladki kolor
+            }
         }
     }
 
@@ -133,10 +178,21 @@ private:
     std::shared_ptr<tf2_ros::Buffer> tf_buffer;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener;
     float slam_height_est = -1.0f;
-    const int width_map = 66;
-    const int height_map = 66;
-    const float map_size = 8.0f;
+    
+    // Zmienne kalibracyjne
+    bool is_calibrated = false;
+    bool has_initial_pose = false;
+    float initial_pose_x = 0.0f;
+    float initial_pose_y = 0.0f;
+    float calib_yaw = 0.0f;
+
+    // Zwiekszona rozdzielczosc mapy
+    const int width_map = 250;
+    const int height_map = 250;
+    const float map_size = 4.0f; 
     const float resolution = map_size / width_map;
+    const float cell_draw_size = 3.0f;
+    
     std::vector<int> grid_map;
     float pose_x = 0.0f;
     float pose_y = 0.0f;
